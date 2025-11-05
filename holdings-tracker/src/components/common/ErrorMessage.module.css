@@ -1,0 +1,45 @@
+.errorBanner {
+  padding: var(--space-3) var(--space-4);
+  background: var(--error-100);
+  border: 1px solid var(--error-500);
+  border-radius: var(--border-radius);
+  color: var(--neutral-900);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}
+
+.errorIcon {
+  color: var(--error-500);
+  font-size: var(--font-size-xl);
+  flex-shrink: 0;
+}
+
+.errorMessage {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.errorDismiss {
+  background: none;
+  border: none;
+  color: var(--neutral-600);
+  cursor: pointer;
+  padding: var(--space-1);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  transition: var(--transition-base);
+  flex-shrink: 0;
+}
+
+.errorDismiss:hover {
+  color: var(--neutral-900);
+}
+
+.errorDismiss:focus-visible {
+  outline: 2px solid var(--error-500);
+  outline-offset: 2px;
+  border-radius: var(--border-radius);
+}

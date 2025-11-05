@@ -1,0 +1,218 @@
+.container {
+  background: var(--neutral-0);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--border-radius-lg);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-4);
+  gap: var(--space-4);
+}
+
+.title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--neutral-900);
+  margin: 0;
+}
+
+.filterInput {
+  flex: 1;
+  max-width: 400px;
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--neutral-300);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-base);
+  transition: var(--transition-base);
+}
+
+.filterInput:hover {
+  border-color: var(--neutral-400);
+}
+
+.filterInput:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px var(--primary-100);
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--neutral-0);
+  border: 1px solid var(--neutral-200);
+}
+
+.table th {
+  padding: var(--space-3) var(--space-4);
+  background: var(--neutral-50);
+  font-weight: var(--font-weight-semibold);
+  text-align: left;
+  border-bottom: 2px solid var(--neutral-200);
+  color: var(--neutral-800);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+.table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: var(--transition-base);
+}
+
+.table th.sortable:hover {
+  background: var(--neutral-100);
+}
+
+.table th.sorted {
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--neutral-100);
+  font-size: var(--font-size-sm);
+}
+
+.row:hover {
+  background: var(--neutral-50);
+}
+
+.expandCol {
+  width: 40px;
+}
+
+.expandButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-1);
+  color: var(--neutral-600);
+  font-size: var(--font-size-sm);
+  transition: var(--transition-base);
+}
+
+.expandButton:hover {
+  color: var(--primary-500);
+}
+
+.expandButton:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
+  border-radius: var(--border-radius);
+}
+
+.companyName {
+  font-weight: var(--font-weight-medium);
+  color: var(--neutral-900);
+  max-width: 300px;
+}
+
+.cusip {
+  font-family: monospace;
+  font-size: var(--font-size-xs);
+  color: var(--neutral-600);
+}
+
+.value {
+  font-weight: var(--font-weight-medium);
+  text-align: right;
+}
+
+.changePositive {
+  color: var(--success-500);
+  font-weight: var(--font-weight-medium);
+}
+
+.changeNegative {
+  color: var(--warning-500);
+  font-weight: var(--font-weight-medium);
+}
+
+.rowNew {
+  background: var(--success-100) !important;
+}
+
+.rowClosed {
+  background: var(--error-100) !important;
+  opacity: 0.7;
+}
+
+.expandedRow {
+  background: var(--neutral-50);
+  border-top: 2px solid var(--primary-200);
+}
+
+.expandedRow td {
+  padding: 0;
+}
+
+.expandedContent {
+  padding: var(--space-4);
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.detailItem {
+  font-size: var(--font-size-sm);
+  color: var(--neutral-700);
+}
+
+.detailItem strong {
+  display: block;
+  color: var(--neutral-900);
+  margin-bottom: var(--space-1);
+}
+
+.rationalePanel {
+  padding: var(--space-4);
+  background: var(--neutral-0);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--border-radius);
+  margin-top: var(--space-4);
+}
+
+.rationaleTitle {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--neutral-900);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.rationaleText {
+  line-height: var(--line-height-relaxed);
+  color: var(--neutral-800);
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.generatingMessage {
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.emptyState {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--neutral-600);
+}
+
+.emptyState p {
+  margin: 0;
+}
