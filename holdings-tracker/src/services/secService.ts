@@ -5,11 +5,19 @@ class SECService {
   private readonly BASE_URL = 'https://data.sec.gov';
   private readonly BROWSE_URL = 'https://www.sec.gov/cgi-bin/browse-edgar';
   private readonly ARCHIVES_URL = 'https://www.sec.gov/Archives/edgar/data';
+  private readonly CORS_PROXY = 'https://api.allorigins.win/raw?url=';
   private readonly HEADERS = {
     'User-Agent': '13F Holdings Tracker contact@example.com',
     'Accept-Encoding': 'gzip, deflate',
   };
   private readonly CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+  /**
+   * Fetch with CORS proxy
+   */
+  private async fetchWithProxy(url: string): Promise<Response> {
+    return fetch(`${this.CORS_PROXY}${encodeURIComponent(url)}`);
+  }
 
   /**
    * Search for funds by name
@@ -18,7 +26,7 @@ class SECService {
     try {
       const url = `${this.BROWSE_URL}?action=getcompany&company=${encodeURIComponent(query)}&type=13F&count=40&output=atom`;
 
-      const response = await fetch(url, { headers: this.HEADERS });
+      const response = await this.fetchWithProxy(url);
 
       if (!response.ok) {
         throw new Error(`SEC search failed: ${response.status}`);
@@ -65,7 +73,7 @@ class SECService {
       const paddedCik = cik.padStart(10, '0');
       const url = `${this.BASE_URL}/submissions/CIK${paddedCik}.json`;
 
-      const response = await fetch(url, { headers: this.HEADERS });
+      const response = await this.fetchWithProxy(url);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch filings: ${response.status}`);
@@ -115,12 +123,12 @@ class SECService {
       // Construct URL to information table XML
       const url = `${this.ARCHIVES_URL}/${cik}/${accessionNoHyphens}/primary_doc.xml`;
 
-      const response = await fetch(url, { headers: this.HEADERS });
+      const response = await this.fetchWithProxy(url);
 
       if (!response.ok) {
         // Try alternative naming convention
         const altUrl = `${this.ARCHIVES_URL}/${cik}/${accessionNoHyphens}/form13fInfoTable.xml`;
-        const altResponse = await fetch(altUrl, { headers: this.HEADERS });
+        const altResponse = await this.fetchWithProxy(altUrl);
 
         if (!altResponse.ok) {
           throw new Error(`Failed to fetch XML: ${response.status}`);
