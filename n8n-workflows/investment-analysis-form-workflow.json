@@ -1,0 +1,574 @@
+{
+  "name": "Investment Analysis - Form Upload",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Private Market Investment File Upload",
+        "formDescription": "Upload Excel files for compute_marker processing or PDF Investment Committee Memos for investment amount extraction.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Analyst Name",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Investment File (Excel)",
+              "fieldType": "file",
+              "requiredField": false,
+              "acceptFileTypes": ".xlsx,.xls"
+            },
+            {
+              "fieldLabel": "IC Memo (PDF)",
+              "fieldType": "file",
+              "requiredField": false,
+              "acceptFileTypes": ".pdf"
+            },
+            {
+              "fieldLabel": "Deal Name",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Notes",
+              "fieldType": "textarea",
+              "requiredField": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "form-trigger",
+      "name": "Form Trigger - File Upload",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.1,
+      "position": [240, 300],
+      "webhookId": "investment-form"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Determine which files were uploaded and route accordingly\nconst input = $input.first().json;\n\nconst hasExcel = input['Investment File (Excel)'] && \n                 input['Investment File (Excel)'].length > 0;\nconst hasPdf = input['IC Memo (PDF)'] && \n               input['IC Memo (PDF)'].length > 0;\n\nreturn [{\n  json: {\n    ...input,\n    hasExcel: hasExcel,\n    hasPdf: hasPdf,\n    processingMode: hasExcel && hasPdf ? 'both' : (hasExcel ? 'excel' : (hasPdf ? 'pdf' : 'none')),\n    analyst: input['Analyst Name'],\n    dealName: input['Deal Name'],\n    notes: input['Notes'] || '',\n    uploadedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "analyze-upload",
+      "name": "Analyze Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "operation": "equal",
+              "value1": "={{ $json.processingMode }}",
+              "value2": "excel"
+            },
+            {
+              "operation": "equal",
+              "value1": "={{ $json.processingMode }}",
+              "value2": "pdf"
+            },
+            {
+              "operation": "equal",
+              "value1": "={{ $json.processingMode }}",
+              "value2": "both"
+            },
+            {
+              "operation": "equal",
+              "value1": "={{ $json.processingMode }}",
+              "value2": "none"
+            }
+          ]
+        }
+      },
+      "id": "route-by-mode",
+      "name": "Route by Processing Mode",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "fromFile",
+        "options": {}
+      },
+      "id": "excel-only-read",
+      "name": "Read Excel Only",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [900, 80]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Add compute_marker column to all Excel rows\nconst items = $input.all();\nconst metadata = $('Analyze Upload').first().json;\n\nfor (const item of items) {\n  item.json.compute_marker = 1;\n  item.json._analyst = metadata.analyst;\n  item.json._deal_name = metadata.dealName;\n  item.json._processed_at = new Date().toISOString();\n}\n\nreturn items;"
+      },
+      "id": "excel-add-marker",
+      "name": "Add compute_marker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 80]
+    },
+    {
+      "parameters": {
+        "operation": "toFile",
+        "fileFormat": "xlsx",
+        "options": {
+          "fileName": "={{ $('Analyze Upload').first().json.dealName }}_processed.xlsx"
+        }
+      },
+      "id": "excel-save",
+      "name": "Save Processed Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [1340, 80]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "id": "pdf-only-extract",
+      "name": "Extract PDF Only",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [900, 240]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert financial document analyst specializing in private market investment committee memos. Extract the following information from the document:\n\n1. Investment Amount (primary commitment or total investment)\n2. Currency\n3. Company/Fund Name being invested in\n4. Investment Type (equity, debt, fund commitment, co-investment, etc.)\n5. Investment Stage (seed, series A/B/C, growth, buyout, etc.)\n6. Expected IRR or return target (if mentioned)\n7. Investment thesis summary (1-2 sentences)\n\nReturn ONLY a valid JSON object:\n{\n  \"investment_amount\": <number>,\n  \"currency\": \"<3-letter code>\",\n  \"target_company\": \"<name>\",\n  \"investment_type\": \"<type>\",\n  \"investment_stage\": \"<stage>\",\n  \"target_irr\": <number or null>,\n  \"thesis_summary\": \"<summary>\",\n  \"confidence\": <0.0-1.0>\n}"
+            },
+            {
+              "role": "user",
+              "content": "Please extract investment information from this Investment Committee Memo:\n\n{{ $json.data }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.1,
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "ai-pdf-extract",
+      "name": "AI Extract IC Memo",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [1120, 240]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse AI extraction and format for Excel\nconst aiResponse = $input.first().json;\nconst metadata = $('Analyze Upload').first().json;\n\nlet extractedData;\ntry {\n  const content = aiResponse.message?.content || aiResponse.content || JSON.stringify(aiResponse);\n  extractedData = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (e) {\n  // Regex fallback for investment amount\n  const text = JSON.stringify(aiResponse);\n  const patterns = [\n    /\\$([\\d,]+(?:\\.\\d+)?)(\\s*(?:million|mn|m|billion|bn|b))?/i,\n    /USD\\s*([\\d,]+(?:\\.\\d+)?)(\\s*(?:million|mn|m|billion|bn|b))?/i,\n    /([\\d,]+(?:\\.\\d+)?)\\s*(?:million|mn|m|billion|bn|b)\\s*(?:USD|dollars)?/i\n  ];\n  \n  let amount = 0;\n  for (const pattern of patterns) {\n    const match = text.match(pattern);\n    if (match) {\n      amount = parseFloat(match[1].replace(/,/g, ''));\n      const multiplier = (match[2] || '').toLowerCase().trim();\n      if (multiplier.startsWith('m')) amount *= 1000000;\n      else if (multiplier.startsWith('b')) amount *= 1000000000;\n      break;\n    }\n  }\n  \n  extractedData = {\n    investment_amount: amount,\n    currency: 'USD',\n    extraction_method: 'regex_fallback',\n    confidence: 0.3\n  };\n}\n\nreturn [{\n  json: {\n    deal_name: metadata.dealName,\n    analyst: metadata.analyst,\n    investment_amount: extractedData.investment_amount,\n    currency: extractedData.currency || 'USD',\n    target_company: extractedData.target_company || 'N/A',\n    investment_type: extractedData.investment_type || 'N/A',\n    investment_stage: extractedData.investment_stage || 'N/A',\n    target_irr: extractedData.target_irr || null,\n    thesis_summary: extractedData.thesis_summary || 'N/A',\n    confidence: extractedData.confidence || 0.5,\n    compute_marker: 1,\n    source: 'IC_Memo_PDF',\n    processed_at: new Date().toISOString(),\n    notes: metadata.notes\n  }\n}];"
+      },
+      "id": "format-pdf-data",
+      "name": "Format PDF Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 240]
+    },
+    {
+      "parameters": {
+        "operation": "toFile",
+        "fileFormat": "xlsx",
+        "options": {
+          "fileName": "={{ $('Analyze Upload').first().json.dealName }}_ic_memo_extract.xlsx"
+        }
+      },
+      "id": "pdf-to-excel",
+      "name": "Create Excel from PDF",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [1560, 240]
+    },
+    {
+      "parameters": {
+        "operation": "fromFile",
+        "options": {}
+      },
+      "id": "both-read-excel",
+      "name": "Read Excel (Both)",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "id": "both-extract-pdf",
+      "name": "Extract PDF (Both)",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [900, 520]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert financial document analyst specializing in private market investment committee memos. Extract investment amount and key details.\n\nReturn ONLY a valid JSON object:\n{\n  \"investment_amount\": <number>,\n  \"currency\": \"<3-letter code>\",\n  \"target_company\": \"<name>\",\n  \"investment_type\": \"<type>\",\n  \"confidence\": <0.0-1.0>\n}"
+            },
+            {
+              "role": "user",
+              "content": "Extract investment information:\n\n{{ $json.data }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.1,
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "both-ai-extract",
+      "name": "AI Extract (Both)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [1120, 520]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-both",
+      "name": "Merge Excel and PDF",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1340, 460]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Merge PDF investment data into Excel rows with compute_marker\nconst items = $input.all();\nconst metadata = $('Analyze Upload').first().json;\n\n// Separate Excel data from AI extraction\nconst excelRows = items.filter(item => !item.json.message?.content);\nconst aiData = items.find(item => item.json.message?.content);\n\nlet pdfExtract = {};\nif (aiData) {\n  try {\n    const content = aiData.json.message?.content;\n    pdfExtract = typeof content === 'string' ? JSON.parse(content) : content;\n  } catch (e) {\n    pdfExtract = { investment_amount: 0, currency: 'USD' };\n  }\n}\n\n// Add compute_marker and PDF data to all Excel rows\nconst result = excelRows.map((item, index) => {\n  return {\n    json: {\n      ...item.json,\n      compute_marker: 1,\n      ic_memo_investment_amount: pdfExtract.investment_amount || 0,\n      ic_memo_currency: pdfExtract.currency || 'USD',\n      ic_memo_target_company: pdfExtract.target_company || 'N/A',\n      ic_memo_investment_type: pdfExtract.investment_type || 'N/A',\n      ic_memo_confidence: pdfExtract.confidence || 0,\n      _analyst: metadata.analyst,\n      _deal_name: metadata.dealName,\n      _processed_at: new Date().toISOString()\n    }\n  };\n});\n\nreturn result;"
+      },
+      "id": "combine-data",
+      "name": "Combine Excel + PDF Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 460]
+    },
+    {
+      "parameters": {
+        "operation": "toFile",
+        "fileFormat": "xlsx",
+        "options": {
+          "fileName": "={{ $('Analyze Upload').first().json.dealName }}_combined.xlsx"
+        }
+      },
+      "id": "save-combined",
+      "name": "Save Combined Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [1780, 460]
+    },
+    {
+      "parameters": {
+        "content": "## Response Messages"
+      },
+      "id": "sticky-responses",
+      "name": "Response Section",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1900, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"type\": \"excel\", \"message\": \"Excel processed with compute_marker column added\", \"deal\": $('Analyze Upload').first().json.dealName, \"rows\": $input.all().length } }}"
+      },
+      "id": "respond-excel",
+      "name": "Respond Excel Done",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 80]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"type\": \"pdf\", \"message\": \"PDF IC Memo processed and investment amount extracted\", \"deal\": $('Analyze Upload').first().json.dealName, \"data\": $json } }}"
+      },
+      "id": "respond-pdf",
+      "name": "Respond PDF Done",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1780, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"type\": \"combined\", \"message\": \"Excel and PDF processed together. Investment amount from IC Memo added to Excel with compute_marker.\", \"deal\": $('Analyze Upload').first().json.dealName, \"rows\": $input.all().length } }}"
+      },
+      "id": "respond-combined",
+      "name": "Respond Combined Done",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2000, 460]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"error\": \"No files uploaded. Please upload at least one Excel or PDF file.\" } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-no-files",
+      "name": "Respond No Files",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 660]
+    },
+    {
+      "parameters": {
+        "content": "## Private Market Investment Analysis Workflow (Form-Based)\n\n### Features\n1. **Excel Processing**: Adds `compute_marker = 1` column\n2. **PDF IC Memo Processing**: AI extracts investment amount\n3. **Combined Processing**: Both files processed together\n\n### Form Fields\n- Analyst Name (required)\n- Investment File (Excel) - optional\n- IC Memo (PDF) - optional  \n- Deal Name (required)\n- Notes (optional)\n\n### Processing Modes\n- `excel`: Only Excel uploaded\n- `pdf`: Only PDF uploaded  \n- `both`: Both files uploaded\n- `none`: No files (error)",
+        "height": 380,
+        "width": 400
+      },
+      "id": "sticky-main",
+      "name": "Workflow Documentation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-20, 60]
+    }
+  ],
+  "connections": {
+    "Form Trigger - File Upload": {
+      "main": [
+        [
+          {
+            "node": "Analyze Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Upload": {
+      "main": [
+        [
+          {
+            "node": "Route by Processing Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Processing Mode": {
+      "main": [
+        [
+          {
+            "node": "Read Excel Only",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract PDF Only",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Excel (Both)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract PDF (Both)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond No Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Excel Only": {
+      "main": [
+        [
+          {
+            "node": "Add compute_marker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add compute_marker": {
+      "main": [
+        [
+          {
+            "node": "Save Processed Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Processed Excel": {
+      "main": [
+        [
+          {
+            "node": "Respond Excel Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Only": {
+      "main": [
+        [
+          {
+            "node": "AI Extract IC Memo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Extract IC Memo": {
+      "main": [
+        [
+          {
+            "node": "Format PDF Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format PDF Data": {
+      "main": [
+        [
+          {
+            "node": "Create Excel from PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Excel from PDF": {
+      "main": [
+        [
+          {
+            "node": "Respond PDF Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Excel (Both)": {
+      "main": [
+        [
+          {
+            "node": "Merge Excel and PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF (Both)": {
+      "main": [
+        [
+          {
+            "node": "AI Extract (Both)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Extract (Both)": {
+      "main": [
+        [
+          {
+            "node": "Merge Excel and PDF",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Excel and PDF": {
+      "main": [
+        [
+          {
+            "node": "Combine Excel + PDF Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Excel + PDF Data": {
+      "main": [
+        [
+          {
+            "node": "Save Combined Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Combined Excel": {
+      "main": [
+        [
+          {
+            "node": "Respond Combined Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "Investment Analysis",
+      "id": "1"
+    },
+    {
+      "name": "Private Markets",
+      "id": "2"
+    },
+    {
+      "name": "Risk Analysis",
+      "id": "3"
+    },
+    {
+      "name": "Form Upload",
+      "id": "4"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
