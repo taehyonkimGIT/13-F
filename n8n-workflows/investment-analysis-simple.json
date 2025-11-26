@@ -1,0 +1,338 @@
+{
+  "name": "Investment Analysis - Form Upload",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Private Market Investment File Upload",
+        "formDescription": "Upload Excel files or PDF Investment Committee Memos",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Analyst Name",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Investment File Excel",
+              "fieldType": "file",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "IC Memo PDF",
+              "fieldType": "file",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Deal Name",
+              "fieldType": "text",
+              "requiredField": true
+            }
+          ]
+        }
+      },
+      "id": "form-trigger",
+      "name": "Form Trigger",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "investment-form"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nconst hasExcel = input['Investment File Excel'] && input['Investment File Excel'].length > 0;\nconst hasPdf = input['IC Memo PDF'] && input['IC Memo PDF'].length > 0;\n\nlet mode = 'none';\nif (hasExcel && hasPdf) mode = 'both';\nelse if (hasExcel) mode = 'excel';\nelse if (hasPdf) mode = 'pdf';\n\nreturn [{\n  json: {\n    ...input,\n    hasExcel: hasExcel,\n    hasPdf: hasPdf,\n    processingMode: mode,\n    analyst: input['Analyst Name'],\n    dealName: input['Deal Name']\n  }\n}];"
+      },
+      "id": "analyze-upload",
+      "name": "Analyze Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "operation": "equal",
+              "value1": "={{ $json.processingMode }}",
+              "value2": "excel"
+            },
+            {
+              "operation": "equal",
+              "value1": "={{ $json.processingMode }}",
+              "value2": "pdf"
+            },
+            {
+              "operation": "equal",
+              "value1": "={{ $json.processingMode }}",
+              "value2": "both"
+            }
+          ]
+        }
+      },
+      "id": "route-by-mode",
+      "name": "Route by Mode",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "fromFile"
+      },
+      "id": "excel-read",
+      "name": "Read Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [900, 140]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst metadata = $('Analyze Upload').first().json;\n\nfor (const item of items) {\n  item.json.compute_marker = 1;\n  item.json._analyst = metadata.analyst;\n  item.json._deal_name = metadata.dealName;\n  item.json._processed_at = new Date().toISOString();\n}\n\nreturn items;"
+      },
+      "id": "add-marker",
+      "name": "Add compute_marker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 140]
+    },
+    {
+      "parameters": {
+        "operation": "toFile",
+        "fileFormat": "xlsx"
+      },
+      "id": "excel-save",
+      "name": "Save Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [1340, 140]
+    },
+    {
+      "parameters": {
+        "operation": "pdf"
+      },
+      "id": "pdf-extract",
+      "name": "Extract PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const pdfText = $input.first().json.data || '';\nconst metadata = $('Analyze Upload').first().json;\n\n// Extract investment amount using regex patterns\nconst patterns = [\n  /\\$([\\d,]+(?:\\.\\d+)?)\\s*(million|mn|m|billion|bn|b)?/i,\n  /USD\\s*([\\d,]+(?:\\.\\d+)?)\\s*(million|mn|m|billion|bn|b)?/i,\n  /([\\d,]+(?:\\.\\d+)?)\\s*(million|mn|m|billion|bn|b)\\s*(?:USD|dollars)/i,\n  /investment\\s*(?:amount|of|:)?\\s*\\$?([\\d,]+(?:\\.\\d+)?)\\s*(million|mn|m|billion|bn|b)?/i,\n  /commitment\\s*(?:of|:)?\\s*\\$?([\\d,]+(?:\\.\\d+)?)\\s*(million|mn|m|billion|bn|b)?/i\n];\n\nlet amount = 0;\nlet currency = 'USD';\n\nfor (const pattern of patterns) {\n  const match = pdfText.match(pattern);\n  if (match) {\n    amount = parseFloat(match[1].replace(/,/g, ''));\n    const multiplier = (match[2] || '').toLowerCase();\n    if (multiplier.startsWith('m')) amount *= 1000000;\n    else if (multiplier.startsWith('b')) amount *= 1000000000;\n    break;\n  }\n}\n\nreturn [{\n  json: {\n    deal_name: metadata.dealName,\n    analyst: metadata.analyst,\n    investment_amount: amount,\n    currency: currency,\n    compute_marker: 1,\n    source: 'IC_Memo_PDF',\n    processed_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "parse-pdf",
+      "name": "Parse Investment Amount",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "toFile",
+        "fileFormat": "xlsx"
+      },
+      "id": "pdf-to-excel",
+      "name": "Create Excel from PDF",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "operation": "fromFile"
+      },
+      "id": "both-excel",
+      "name": "Read Excel Both",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [900, 460]
+    },
+    {
+      "parameters": {
+        "operation": "pdf"
+      },
+      "id": "both-pdf",
+      "name": "Extract PDF Both",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [900, 580]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll"
+      },
+      "id": "merge-both",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1120, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst metadata = $('Analyze Upload').first().json;\n\n// Find PDF text data\nlet pdfText = '';\nlet excelRows = [];\n\nfor (const item of items) {\n  if (item.json.data && typeof item.json.data === 'string') {\n    pdfText = item.json.data;\n  } else {\n    excelRows.push(item.json);\n  }\n}\n\n// Extract investment amount from PDF\nconst patterns = [\n  /\\$([\\d,]+(?:\\.\\d+)?)\\s*(million|mn|m|billion|bn|b)?/i,\n  /([\\d,]+(?:\\.\\d+)?)\\s*(million|mn|m|billion|bn|b)\\s*(?:USD|dollars)/i\n];\n\nlet investmentAmount = 0;\nfor (const pattern of patterns) {\n  const match = pdfText.match(pattern);\n  if (match) {\n    investmentAmount = parseFloat(match[1].replace(/,/g, ''));\n    const mult = (match[2] || '').toLowerCase();\n    if (mult.startsWith('m')) investmentAmount *= 1000000;\n    else if (mult.startsWith('b')) investmentAmount *= 1000000000;\n    break;\n  }\n}\n\n// Add to all Excel rows\nconst result = excelRows.map(row => ({\n  json: {\n    ...row,\n    compute_marker: 1,\n    ic_memo_investment_amount: investmentAmount,\n    _analyst: metadata.analyst,\n    _deal_name: metadata.dealName,\n    _processed_at: new Date().toISOString()\n  }\n}));\n\nreturn result.length > 0 ? result : [{ json: { compute_marker: 1, ic_memo_investment_amount: investmentAmount, _analyst: metadata.analyst, _deal_name: metadata.dealName } }];"
+      },
+      "id": "combine-both",
+      "name": "Combine Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 520]
+    },
+    {
+      "parameters": {
+        "operation": "toFile",
+        "fileFormat": "xlsx"
+      },
+      "id": "save-combined",
+      "name": "Save Combined",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [1560, 520]
+    }
+  ],
+  "connections": {
+    "Form Trigger": {
+      "main": [
+        [
+          {
+            "node": "Analyze Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Upload": {
+      "main": [
+        [
+          {
+            "node": "Route by Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Mode": {
+      "main": [
+        [
+          {
+            "node": "Read Excel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Excel Both",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract PDF Both",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Excel": {
+      "main": [
+        [
+          {
+            "node": "Add compute_marker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add compute_marker": {
+      "main": [
+        [
+          {
+            "node": "Save Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF": {
+      "main": [
+        [
+          {
+            "node": "Parse Investment Amount",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Investment Amount": {
+      "main": [
+        [
+          {
+            "node": "Create Excel from PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Excel Both": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Both": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          {
+            "node": "Combine Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Data": {
+      "main": [
+        [
+          {
+            "node": "Save Combined",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
