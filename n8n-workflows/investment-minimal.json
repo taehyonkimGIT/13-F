@@ -1,0 +1,56 @@
+{
+  "name": "Investment Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "investment-upload",
+        "responseMode": "lastNode"
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\n\nfor (const item of items) {\n  item.json.compute_marker = 1;\n  item.json.processed_at = new Date().toISOString();\n}\n\nreturn items;"
+      },
+      "name": "Add compute_marker",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {},
+      "name": "Return Data",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Add compute_marker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add compute_marker": {
+      "main": [
+        [
+          {
+            "node": "Return Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
