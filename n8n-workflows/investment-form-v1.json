@@ -1,0 +1,89 @@
+{
+  "name": "Investment Analysis Form",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Private Market Investment Upload",
+        "formDescription": "Upload Excel or PDF files for processing",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Analyst Name",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Deal Name",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Upload File",
+              "fieldType": "file",
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "lastNode"
+      },
+      "name": "Upload Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "investment-form"
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\n\nfor (const item of items) {\n  item.json.compute_marker = 1;\n  item.json.processed_at = new Date().toISOString();\n}\n\nreturn items;"
+      },
+      "name": "Add compute_marker",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "message",
+              "value": "File processed with compute_marker added"
+            }
+          ]
+        }
+      },
+      "name": "Set Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "Upload Form": {
+      "main": [
+        [
+          {
+            "node": "Add compute_marker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add compute_marker": {
+      "main": [
+        [
+          {
+            "node": "Set Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
